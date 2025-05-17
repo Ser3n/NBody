@@ -52,7 +52,11 @@ body *bodies = new body[N];
 const int NUM_THREADS = 16;
 // Mutex for thread safety
 mutex cout_mtx;
+// Count for testing and limiting cout
 int TEST_COUNT = 0;
+// Global Acceleration array
+vec2 acc[N];
+
 // Print function
 void printID()
 {
@@ -63,16 +67,48 @@ void printID()
 }
 // helper functions
 
-void thread_forces(int count)
+void thread_forces(int t, int start, int end)
 {
-	
-	if (TEST) //only print x10
-	{	lock_guard<mutex> lock(cout_mtx);
-		cout << "Thread " << count << " is working" << endl;
-		TEST_COUNT++;
+	if (TEST)
+	{
+		lock_guard<mutex> lock(cout_mtx);
+		cout << "Thread " << t << " calculating forces for bodies "
+			 << start << " to " << end - 1 << endl;
 	}
 
-	// Insert work TODO:!!
+	// For each body in our assigned range
+	for (int i = start; i < end; ++i)
+	{
+		// Clear acceleration for this body
+		acc[i] = vec2(0, 0);
+
+		// For each following body - calculate interaction
+		for (int j = i + 1; j < N; ++j)
+		{
+			// Difference in position
+			vec2 dx = bodies[i].pos - bodies[j].pos;
+
+			// Normalised difference in position
+			vec2 u = normalise(dx);
+
+			// Calculate distance squared
+			double d2 = length2(dx);
+
+			// If greater than minimum distance
+			if (d2 > min2)
+			{
+				// Smoothing factor for particles close to minimum distance
+				double x = smoothstep(min2, 2 * min2, d2);
+
+				// Force between bodies
+				double f = -G * bodies[i].mass * bodies[j].mass / d2;
+
+				// Add to acceleration
+				acc[i] += (u * f / bodies[i].mass) * x;
+				acc[j] -= (u * f / bodies[j].mass) * x;
+			}
+		}
+	}
 }
 // Update Nbody Simulation
 void update_original()
@@ -130,8 +166,29 @@ void update_original()
 
 void update()
 {
+	if (TEST)
+	{
+		cout << "Implementing Parallelism" << endl;
+	}
 
-	if (TEST && TEST_COUNT <1) //Only print x1
+	// Clear Acceleration
+	for (int i = 0; i < N; ++i)
+	{
+		acc[i] = vec2(0, 0);
+	}
+
+	// Distibution between the threads
+
+	int bodies_distibuted = N / NUM_THREADS; // Total number of bodies DIV by the number of threads to get the number of bodies per thread
+	int bodies_left = N % NUM_THREADS;		 // The remainder, if any
+
+	if (TEST)
+	{
+		cout << "Distibuting bodies between threads: " << N << "/" << NUM_THREADS << " = " << bodies_distibuted << endl;
+		cout << "Leftover bodies: " << bodies_left << endl;
+	}
+
+	if (TEST && TEST_COUNT < 1) // Only print x1
 	{
 		cout << "----------------------------------------" << endl;
 		cout << "Testing with " << NUM_THREADS << " threads" << endl;
@@ -145,8 +202,18 @@ void update()
 	// Create and launch test threads
 	int thread_count = 1;
 	for (int t = 0; t < NUM_THREADS; ++t)
-	{
-		threads.push_back(thread(thread_forces, thread_count));
+	{ // calculate this threads range
+		int start = t * bodies_distibuted;
+		int end;
+	
+	
+		if (t == NUM_THREADS - 1) {
+			end = start + bodies_distibuted + bodies_left;
+		} else {
+			end = start + bodies_distibuted;
+		}
+
+		threads.push_back(thread(thread_forces, t+1, start, end)); // We'll look at t
 		thread_count++;
 	}
 
@@ -160,9 +227,25 @@ void update()
 		cout << "Threads completed" << endl;
 
 	// Call the original update function
-	if (TEST)
-	{
-		update_original();
+	// if (TEST)
+	// {
+	// 	update_original();
+	// }
+
+	if (TEST) {
+		cout << "Force calculation complete, updating positions and velocities" << endl;
+	}
+	// For each body
+	for(int i = 0; i < N; ++i) {
+		// Update Position
+		bodies[i].pos += bodies[i].vel * dt;
+
+		// Update Velocity
+		bodies[i].vel += acc[i] * dt;
+	}
+	
+	if (TEST) {
+		cout << "Parallel update complete" << endl;
 	}
 }
 // Initialise NBody Simulation
