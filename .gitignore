@@ -1,0 +1,13 @@
+*.exe
+*.out
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.lib
+*.exp
+*.def
+*.manifest
+*.res
+*.rc
