@@ -11,3 +11,7 @@
 *.manifest
 *.res
 *.rc
+
+a3_handout/_MACOSX
+
+*.zip
