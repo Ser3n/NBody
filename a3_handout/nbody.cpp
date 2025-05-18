@@ -5,6 +5,9 @@
 #include <thread>
 #include <vector>
 #include <mutex>
+#include <cmath>
+
+
 
 // Project Headers
 #include "nbody.h"
@@ -15,6 +18,11 @@
 #include <SFML/Graphics.hpp>
 #endif
 
+//HAd issues with the math library and the M_PI constant
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 // Number of particles
 #define SMALL
 // #define LARGE
@@ -22,6 +30,9 @@
 
 // Define TESTING
 const bool TEST = true;
+
+//Define original function for comparison
+const bool ORIGINAL = false;
 
 #if defined(SMALL)
 const int N = 1000;
@@ -50,12 +61,13 @@ body *bodies = new body[N];
 
 // Set the number of threads
 const int NUM_THREADS = 16;
+
 // Mutex for thread safety
 mutex cout_mtx;
+
 // Count for testing and limiting cout
 int TEST_COUNT = 0;
-// Global Acceleration array
-vec2 acc[N];
+
 
 // Print function
 void printID()
@@ -65,22 +77,21 @@ void printID()
 	cout << "   Submitted by: Zak Turner, 23003797   " << endl;
 	cout << "----------------------------------------" << endl;
 }
+
 // helper functions
 
-void thread_forces(int t, int start, int end)
+void thread_forces(int t, int start, int end, vec2 *acc)
 {
-	if (TEST)
+	if (TEST && TEST_COUNT % 100 == 0)
 	{
 		lock_guard<mutex> lock(cout_mtx);
-		cout << "Thread " << t << " calculating forces for bodies "
-			 << start << " to " << end - 1 << endl;
+		cout << "Thread " << t << " calculating forces for bodies " << start << " to " << end - 1 << " " << endl;
 	}
 
-	// For each body in our assigned range
+	// For each body in our assigned range //Used from original UPDATE function
 	for (int i = start; i < end; ++i)
 	{
-		// Clear acceleration for this body
-		acc[i] = vec2(0, 0);
+		
 
 		// For each following body - calculate interaction
 		for (int j = i + 1; j < N; ++j)
@@ -166,10 +177,9 @@ void update_original()
 
 void update()
 {
-	if (TEST)
-	{
-		cout << "Implementing Parallelism" << endl;
-	}
+	
+	// Acceleration
+		vec2 acc[N];
 
 	// Clear Acceleration
 	for (int i = 0; i < N; ++i)
@@ -178,44 +188,50 @@ void update()
 	}
 
 	// Distibution between the threads
-
-	int bodies_distibuted = N / NUM_THREADS; // Total number of bodies DIV by the number of threads to get the number of bodies per thread
+	int bodies_distributed = N / NUM_THREADS; // Total number of bodies DIV by the number of threads to get the number of bodies per thread (Tried float division but was problematic in arrays! And just problematic)
 	int bodies_left = N % NUM_THREADS;		 // The remainder, if any
 
-	if (TEST)
+	if (TEST && TEST_COUNT % 100 == 0 ) //Limit output
 	{
-		cout << "Distibuting bodies between threads: " << N << "/" << NUM_THREADS << " = " << bodies_distibuted << endl;
+		lock_guard<mutex> lock(cout_mtx);
+		cout << "Distibuting bodies between threads: " << N << "/" << NUM_THREADS << " = " << bodies_distributed << endl;
 		cout << "Leftover bodies: " << bodies_left << endl;
+		cout << "Total = " << "(Bodies distributed * Number of threads) + Remainder = (" << bodies_distributed << " * " << NUM_THREADS << ") + " << bodies_left << " = " << (bodies_distributed * NUM_THREADS) + bodies_left << endl;
 	}
 
-	if (TEST && TEST_COUNT < 1) // Only print x1
-	{
-		cout << "----------------------------------------" << endl;
-		cout << "Testing with " << NUM_THREADS << " threads" << endl;
-		cout << "Supported thread count: " << thread::hardware_concurrency() << endl;
-		cout << "----------------------------------------" << endl;
-	}
 
 	// Vector to hold threads
 	std::vector<std::thread> threads;
 
-	// Create and launch test threads
-	int thread_count = 1;
+
 	for (int t = 0; t < NUM_THREADS; ++t)
 	{ // calculate this threads range
-		int start = t * bodies_distibuted;
+		int start = t * bodies_distributed;
 		int end;
 	
-	
-		if (t == NUM_THREADS - 1) {
-			end = start + bodies_distibuted + bodies_left;
-		} else {
-			end = start + bodies_distibuted;
-		}
-
-		threads.push_back(thread(thread_forces, t+1, start, end)); // We'll look at t
-		thread_count++;
+	// Last thread gets the remaining bodies
+	if (t == NUM_THREADS - 1) 
+	{
+		end = start + bodies_distributed + bodies_left;
 	}
+	else //No remainder
+	{
+		end = start + bodies_distributed;
+	}
+
+	 if (TEST && TEST_COUNT % 100 == 0) 
+	 {
+			lock_guard<mutex> lock(cout_mtx);
+            cout << "Thread " << t << " assigned bodies " << start << " to " << (end-1) << " (" << (end-start) << " bodies) " << endl;
+        }
+
+
+		threads.push_back(thread(thread_forces, t, start, end, acc)); 
+
+	}
+
+	
+
 
 	// Waiting
 	for (auto &thread : threads)
@@ -223,30 +239,48 @@ void update()
 		thread.join();
 	}
 
-	if (TEST)
-		cout << "Threads completed" << endl;
-
-	// Call the original update function
 	// if (TEST)
 	// {
-	// 	update_original();
+	// 	cout << "Threads completed" << endl;
 	// }
+		
 
-	if (TEST) {
-		cout << "Force calculation complete, updating positions and velocities" << endl;
-	}
+
 	// For each body
 	for(int i = 0; i < N; ++i) {
+		
 		// Update Position
 		bodies[i].pos += bodies[i].vel * dt;
 
 		// Update Velocity
 		bodies[i].vel += acc[i] * dt;
 	}
+
+		TEST_COUNT++;
+	// 	cout << TEST_COUNT << endl;
+
+	if (TEST && TEST_COUNT == NO_STEPS )
+	{
+		cout << "Implementing update" << endl;
+		cout << "----------------------------------------" << endl;
+		 cout << "Distributing " << N << " bodies across " << NUM_THREADS << " threads" << endl;
+
+		 cout << "----------------------------------------" << endl;
+	}
+
+		if (TEST && TEST_COUNT == NO_STEPS) // Only print x1
+	{
+		cout << "----------------------------------------" << endl;
+		cout << "Testing with " << NUM_THREADS << " threads" << endl;
+		cout << "Supported thread count: " << thread::hardware_concurrency() << endl;
+		cout << "----------------------------------------" << endl;
+	}
+
 	
-	if (TEST) {
+	if (TEST && TEST_COUNT == NO_STEPS) {
 		cout << "Parallel update complete" << endl;
 	}
+
 }
 // Initialise NBody Simulation
 void initialise()
@@ -273,7 +307,7 @@ int main()
 {
 	// Create Window
 	sf::ContextSettings settings;
-	settings.antialiasingLevel = 1;
+	settings.AntialiasingLevel = 1;
 	sf::RenderWindow window(sf::VideoMode(width, height), "NBody Simulator", sf::Style::Default, settings);
 
 	// Initialise NBody Simulation
@@ -330,6 +364,7 @@ int main()
 	// Initialise NBody Simulation
 	initialise();
 
+
 	// Get start time
 	std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
 
@@ -337,7 +372,15 @@ int main()
 	for (int i = 0; i < NO_STEPS; i++)
 	{
 		// Update NBody Simluation
-		update();
+		if(ORIGINAL)
+		{
+			update_original();
+		}
+		else
+		{
+			update();
+		}
+		
 	}
 
 	// Get end time
@@ -378,5 +421,7 @@ int main()
 
 	// Time Taken
 	std::cout << "Time Taken: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000000.0 << std::endl;
+
+return 0;
 }
 #endif
