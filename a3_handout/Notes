@@ -1,6 +1,6 @@
 ## ReadME assignment 3
 
-During the assignment and installing SMFL 3.0 with g++ version 14.2. I had compilation issues with the graphic component. But, there was also a compiler issue which seems to stem from the install. After spending time debugging I realised there was a SegFault during the SprintF call in main! This also happened with the original, untouched code. It seemed like the stack memory was reduced and thus caused overflows! After re-installing a new version of the compiler, g++.exe (Rev4, Built by MSYS2 project) 15.1.0, the problems vanished?!? Left me confused but nothing a re-install didnt fix!
+During the assignment and installing SMFL 3.0 with g++ version 14.2. I had compilation issues with the graphic component. But, there was also a compiler issue which seems to stem from the install. I wasn't receiving any output to the console. After spending time debugging I realised there was a SegFault during the SprintF call in main! This also occured with the original, untouched code. It seemed like the stack memory was reduced and thus caused overflows! After re-installing a new version of the compiler, g++.exe (Rev4, Built by MSYS2 project) 15.1.0, the problems vanished?!? Left me confused but nothing a re-install/update didnt fix!
 
 ### Compiling
  Compiled with g++.exe (Rev4, Built by MSYS2 project) 15.1.0.
@@ -13,7 +13,7 @@ make
 - Terminal compile
 
 ```
-g++ nbody.cpp -o nbody-nographics -O3 -pthread -std=c++11 -I./
+g++ nbody.cpp -o nbody-nographics -O3 -I./
 ```
 
 ### Implementation
@@ -33,10 +33,11 @@ These are set to false by default;
  Attempted to distribute force calculations amongst the threads equally. Achieved this by dividing the bodies amongst the number of threads and adding the remainder to the final thread.
 
  The implementation uses 
- - A vector of threads for management
+ - A global vector of threads for management
+ - A local vector of threds
  - A mutex for safe console output
  - Joining threads to ensure all calculations complete before updating the position.
 
  To avoid overflow
- - Added acceleration array to the heap
+ - Added acceleration array to the heap from the stack
 

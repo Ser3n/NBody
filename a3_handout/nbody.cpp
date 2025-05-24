@@ -24,7 +24,7 @@
 #endif
 
 // Number of particles
-#define SMALL
+ #define SMALL
 // #define LARGE
 // #define MASSIVE
 
@@ -32,7 +32,7 @@
 const bool TEST = false;
 
 //Define original function for comparison
-const bool ORIGINAL =false;
+const bool ORIGINAL = false;
 
 #if defined(SMALL)
 const int N = 1000;
@@ -60,7 +60,7 @@ const int height = 1080;
 body *bodies = new body[N];
 
 // Set the number of threads
-const int NUM_THREADS = 6;
+const int NUM_THREADS = thread::hardware_concurrency() > 0 ? thread::hardware_concurrency() : 1; // Use hardware concurrency if available, otherwise default to 4 threads
 
 // Mutex for thread safety
 mutex cout_mtx;
@@ -283,12 +283,12 @@ void update()
 		bodies[i].vel += acc[i] * dt;
 	}
 
-	// Clean up 
-    // for (int t = 0; t < NUM_THREADS; ++t)
-    // {
-    //     delete[] t_l_acc[t];
-    // }
-    // delete[] acc;
+	//Clean up 
+    for (int t = 0; t < NUM_THREADS; ++t)
+    {
+        delete[] t_l_acc[t];
+    }
+    delete[] acc;
 
 		TEST_COUNT++;
 	// 	cout << TEST_COUNT << endl;
@@ -302,13 +302,13 @@ void update()
 		 cout << "----------------------------------------" << endl;
 	}
 
-		if (TEST && TEST_COUNT == NO_STEPS) // Only print x1
-	{
-		cout << "----------------------------------------" << endl;
-		cout << "Testing with " << NUM_THREADS << " threads" << endl;
-		cout << "Supported thread count: " << thread::hardware_concurrency() << endl;
-		cout << "----------------------------------------" << endl;
-	}
+	// 	if (TEST && TEST_COUNT == NO_STEPS) // Only print x1
+	// {
+	// 	cout << "----------------------------------------" << endl;
+	// 	cout << "Testing with " << NUM_THREADS << " threads" << endl;
+	// 	cout << "Supported thread count: " << thread::hardware_concurrency() << endl;
+	// 	cout << "----------------------------------------" << endl;
+	// }
 
 	
 	if (TEST && TEST_COUNT == NO_STEPS) {
@@ -403,11 +403,24 @@ int main()
 	std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
 
 	// Run Simulation
+	if (ORIGINAL)
+	{
+		cout << "RUNNING ORIGINAL UPDATE!" << endl;
+	}
+	else
+	{
+		cout << "RUNNING PARALLEL UPDATE!" << endl;
+		cout << "----------------------------------------" << endl;
+		cout << "Testing with " << NUM_THREADS << " threads" << endl;
+		cout << "Supported thread count: " << thread::hardware_concurrency() << endl;
+		cout << "----------------------------------------" << endl;
+	}
+
 	for (int i = 0; i < NO_STEPS; i++)
 	{
 		// Update NBody Simluation
 		if(ORIGINAL)
-		{
+		{			
 			update_original();
 		}
 		else
