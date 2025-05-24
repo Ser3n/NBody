@@ -29,10 +29,10 @@
 // #define MASSIVE
 
 // Define TESTING
-const bool TEST = true;
+const bool TEST = false;
 
 //Define original function for comparison
-const bool ORIGINAL = false;
+const bool ORIGINAL =false;
 
 #if defined(SMALL)
 const int N = 1000;
@@ -60,7 +60,7 @@ const int height = 1080;
 body *bodies = new body[N];
 
 // Set the number of threads
-const int NUM_THREADS = 16;
+const int NUM_THREADS = 6;
 
 // Mutex for thread safety
 mutex cout_mtx;
@@ -80,13 +80,19 @@ void printID()
 
 // helper functions
 
-void thread_forces(int t, int start, int end, vec2 *acc)
+void thread_forces(int t, int start, int end, vec2 *l_acc)
 {
 	if (TEST && TEST_COUNT % 100 == 0)
 	{
 		lock_guard<mutex> lock(cout_mtx);
 		cout << "Thread " << t << " calculating forces for bodies " << start << " to " << end - 1 << " " << endl;
 	}
+
+	 // Initialize the local acceleration array to all zeros
+    // for (int i = 0; i < N; ++i)
+    // {
+    //     l_acc[i] = vec2(0, 0);
+    // }
 
 	// For each body in our assigned range //Used from original UPDATE function
 	for (int i = start; i < end; ++i)
@@ -115,8 +121,8 @@ void thread_forces(int t, int start, int end, vec2 *acc)
 				double f = -G * bodies[i].mass * bodies[j].mass / d2;
 
 				// Add to acceleration
-				acc[i] += (u * f / bodies[i].mass) * x;
-				acc[j] -= (u * f / bodies[j].mass) * x;
+				l_acc[i] += (u * f / bodies[i].mass) * x;
+				l_acc[j] -= (u * f / bodies[j].mass) * x;
 			}
 		}
 	}
@@ -178,8 +184,11 @@ void update_original()
 void update()
 {
 	
-	// Acceleration
-		vec2 acc[N];
+	// // Acceleration
+	// 	vec2 acc[N];
+
+	 // Use a global acceleration array and allocate on the heap instead of the stack (issues with stack overflow see notes) seperating concerns from the forces array
+    vec2 *acc = new vec2[N];
 
 	// Clear Acceleration
 	for (int i = 0; i < N; ++i)
@@ -199,10 +208,23 @@ void update()
 		cout << "Total = " << "(Bodies distributed * Number of threads) + Remainder = (" << bodies_distributed << " * " << NUM_THREADS << ") + " << bodies_left << " = " << (bodies_distributed * NUM_THREADS) + bodies_left << endl;
 	}
 
+ // Create thread-local acceleration array, was receiving race conditions when using a single global array
+    vector<vec2*> t_l_acc;
+	
+    for (int t = 0; t < NUM_THREADS; ++t)
+    {
+        vec2 *l_acc = new vec2[N];
+        // Initialize thread-local array to zero
+        for (int i = 0; i < N; ++i)
+        {
+            l_acc[i] = vec2(0, 0);
+        }
+        t_l_acc.push_back(l_acc);
+    }
+
 
 	// Vector to hold threads
 	std::vector<std::thread> threads;
-
 
 	for (int t = 0; t < NUM_THREADS; ++t)
 	{ // calculate this threads range
@@ -226,12 +248,9 @@ void update()
         }
 
 
-		threads.push_back(thread(thread_forces, t, start, end, acc)); 
+		threads.push_back(thread(thread_forces, t, start, end, t_l_acc[t])); //Adding the thread to the vector, passing the thread number, start and end indices, and the local acceleration array for that thread
 
 	}
-
-	
-
 
 	// Waiting
 	for (auto &thread : threads)
@@ -243,7 +262,15 @@ void update()
 	// {
 	// 	cout << "Threads completed" << endl;
 	// }
-		
+	
+	    // Combine all thread-local arrays into global array
+    for (int t = 0; t < NUM_THREADS; ++t)
+    {
+        for (int i = 0; i < N; ++i)
+        {
+            acc[i] += t_l_acc[t][i];
+        }
+    }
 
 
 	// For each body
@@ -255,6 +282,13 @@ void update()
 		// Update Velocity
 		bodies[i].vel += acc[i] * dt;
 	}
+
+	// Clean up 
+    // for (int t = 0; t < NUM_THREADS; ++t)
+    // {
+    //     delete[] t_l_acc[t];
+    // }
+    // delete[] acc;
 
 		TEST_COUNT++;
 	// 	cout << TEST_COUNT << endl;

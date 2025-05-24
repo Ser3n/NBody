@@ -1,5 +1,5 @@
 cxx = g++
-cflags = -O3 -pthread -std=c++11
+cflags = -O3
 inc = -I./
 sfml-libs = -lsfml-window -lsfml-graphics -lsfml-system
 
